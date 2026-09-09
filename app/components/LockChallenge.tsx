@@ -12,11 +12,12 @@ const directions = ["↑", "→", "↓", "←"];
 type LockSpec = { choices: string[]; target: string[]; mode: "wheels" | "pins"; clue: string };
 
 function lockSpec(type: LockType): LockSpec {
-  if (type === "five-letter") return { choices: alphabet, target: ["C", "A", "F", "E", "S"], mode: "wheels", clue: "CAFES" };
+  if (type.startsWith("five-letter")) return { choices: alphabet, target: ["C", "A", "F", "E", "S"], mode: "wheels", clue: "CAFES" };
   if (type === "vertical-word") return { choices: alphabet, target: ["C", "A", "F", "E"], mode: "wheels", clue: "CAFE" };
   if (type === "four-number-dials") return { choices: numbers, target: ["0", "0", "0", "0"], mode: "wheels", clue: "0000" };
   if (type === "five-number-dials") return { choices: numbers, target: ["6", "6", "5", "6", "6"], mode: "wheels", clue: "66566" };
   if (type === "eight-pin") return { choices: ["0", "1"], target: ["1", "0", "1", "1", "0", "1", "0", "0"], mode: "pins", clue: "● ○ ● ●  ○ ● ○ ○" };
+  if (type === "ten-pin") return { choices: ["0", "1"], target: ["1", "0", "1", "1", "0", "1", "0", "0", "1", "0"], mode: "pins", clue: "● ○ ● ● ○  ● ○ ○ ● ○" };
   return { choices: directions, target: ["↑", "→", "↓", "←"], mode: "wheels", clue: "↑ → ↓ ←" };
 }
 

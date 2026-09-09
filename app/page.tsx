@@ -214,7 +214,6 @@ export default function Home() {
     didDrag.current = false;
     draggingRef.current = true;
     setTransitioning(false);
-    setDragging(true);
   };
   const pointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!draggingRef.current) return;
@@ -228,7 +227,9 @@ export default function Home() {
     if (Math.abs(distance) > 6 && !didDrag.current) {
       didDrag.current = true;
       event.currentTarget.setPointerCapture(event.pointerId);
+      setDragging(true);
     }
+    if (!didDrag.current) return;
     setDragX(distance);
     const angle = Math.max(-30, Math.min(30, -(distance * .075 + gesture.current.velocity * 9)));
     lastLockAngle.current = angle;
@@ -241,7 +242,7 @@ export default function Home() {
     const distance = event.clientX - gesture.current.x;
     const duration = Math.max(performance.now() - gesture.current.time, 1);
     const velocity = Math.abs(distance) / duration;
-    const shouldMove = Math.abs(distance) > Math.min(90, event.currentTarget.clientWidth * .16) || velocity > .55;
+    const shouldMove = didDrag.current && (Math.abs(distance) > Math.min(90, event.currentTarget.clientWidth * .16) || velocity > .55);
     setDragging(false);
     setTransitioning(true);
     if (shouldMove) move(distance < 0 ? 1 : -1);
@@ -255,7 +256,7 @@ export default function Home() {
     setDragging(false);
     setTransitioning(true);
     setDragX(0);
-    if (carouselRef.current) releaseLocks(carouselRef.current, lastLockAngle.current);
+    if (carouselRef.current && didDrag.current) releaseLocks(carouselRef.current, lastLockAngle.current);
     carouselRef.current?.style.setProperty("--background-drag", "0px");
   };
   const finishTransition = (event: TransitionEvent<HTMLDivElement>) => {
@@ -312,6 +313,7 @@ export default function Home() {
                       </svg>
                       <span>{cabinet.number}</span>
                       <CabinetLock type={cabinet.lock} open={unlockedCabinets.includes(cabinet.number)} />
+                      <i className="cabinet-knob-overlay" aria-hidden="true" />
                     </button>
                   ))}
                 </div>

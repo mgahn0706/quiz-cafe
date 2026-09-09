@@ -34,7 +34,8 @@ export function InteractiveLock({ type, values, choices, open, disabled = false,
   const wheelGap = 7;
   const controlsWidth = wheelCount * wheelWidth + (wheelCount - 1) * wheelGap;
   const controlsStart = (420 - controlsWidth) / 2;
-  const bodyColor = type === "direction-red" ? "#bd2f2c" : type === "direction-black" ? "#26292c" : type === "direction-light-blue" ? "#78c5d5" : type === "vertical-word" ? "#f0eee7" : "#c9c9c4";
+  const bodyColor = type === "direction-red" ? "#bd2f2c" : type === "direction-black" ? "#26292c" : type === "direction-light-blue" ? "#78c5d5" : type === "five-letter-red" ? "#e34645" : type === "five-letter-blue" ? "#2998e5" : type === "vertical-word" ? "#f0eee7" : "#c9c9c4";
+  const wheelColor = type === "five-letter-red" ? "#c92336" : type === "five-letter-blue" ? "#0875cb" : "#28292b";
 
   useEffect(() => () => {
     Object.values(settleTimers.current).forEach(clearTimeout);
@@ -136,7 +137,8 @@ export function InteractiveLock({ type, values, choices, open, disabled = false,
         <linearGradient id="word-fade-right"><stop stopColor="#08768c" stopOpacity="0" /><stop offset="1" stopColor="#08768c" stopOpacity=".78" /></linearGradient>
       </defs>
       <g filter="url(#interactive-shadow)">
-        <path key={resetPulse} className={`interactive-shackle${resetPulse ? " is-resetting" : ""}${isDirection(type) && !disabled ? " is-reset-control" : ""}`} role={isDirection(type) ? "button" : undefined} tabIndex={isDirection(type) && !disabled ? 0 : undefined} aria-label={isDirection(type) ? "Reset direction sequence" : undefined} aria-disabled={isDirection(type) ? disabled : undefined} d="M130 165V92c0-88 160-88 160 0v76" fill="none" stroke="url(#interactive-chrome)" strokeWidth="34" strokeLinecap="round" onClick={resetWithRing} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") resetWithRing(); }} />
+        <path key={resetPulse} className={`interactive-shackle interactive-shackle--closed${resetPulse ? " is-resetting" : ""}${isDirection(type) && !disabled ? " is-reset-control" : ""}`} role={isDirection(type) ? "button" : undefined} tabIndex={isDirection(type) && !disabled ? 0 : undefined} aria-label={isDirection(type) ? "Reset direction sequence" : undefined} aria-disabled={isDirection(type) ? disabled : undefined} d="M130 165V92c0-88 160-88 160 0v76" fill="none" stroke="url(#interactive-chrome)" strokeWidth="34" strokeLinecap="round" onClick={resetWithRing} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") resetWithRing(); }} />
+        <path className="interactive-shackle interactive-shackle--opened" d="M130 165V92c0-88 160-88 160 0v13" fill="none" stroke="url(#interactive-chrome)" strokeWidth="34" strokeLinecap="round" />
         {isDirection(type) ? (
           <g className="interactive-lock-body">
             <path d="M105 168c8-38 37-55 70-55h70c34 0 62 17 70 55l20 80c8 76-42 112-125 112S77 324 85 248Z" fill={bodyColor} stroke="#54352e" strokeWidth="12" />
@@ -148,10 +150,11 @@ export function InteractiveLock({ type, values, choices, open, disabled = false,
             </g>
             <circle className="direction-pad direction-hit-area" role="button" aria-label="Tap a direction or swipe" aria-disabled={disabled} tabIndex={disabled ? -1 : 0} cx="210" cy="255" r="86" fill="transparent" onPointerDown={(event) => { if (disabled) return; event.currentTarget.setPointerCapture(event.pointerId); directionStart.current = { x: event.clientX, y: event.clientY }; setDirectionSettling(false); }} onPointerMove={moveDirection} onPointerUp={finishDirection} onPointerCancel={() => { directionStart.current = null; setDirectionSettling(true); setDirectionOffset({ x: 0, y: 0 }); }} onKeyDown={(event) => { const direction = { ArrowUp: "↑", ArrowRight: "→", ArrowDown: "↓", ArrowLeft: "←" }[event.key]; if (!disabled && direction) onDirection(direction); }} />
           </g>
-        ) : type === "eight-pin" ? (
+        ) : type === "eight-pin" || type === "ten-pin" ? (
           <g className="interactive-lock-body">
-            <rect x="105" y="145" width="210" height="220" rx="26" fill={bodyColor} stroke="#56514b" strokeWidth="12" />
-            {values.map((value, index) => { const column = index % 2; const row = Math.floor(index / 2); const x = 165 + column * 90; const y = 190 + row * 48; return <g className="direct-pin" role="button" tabIndex={disabled ? -1 : 0} aria-disabled={disabled} aria-label={`Pin ${index + 1}`} onClick={() => { if (!disabled) onToggle(index); }} onKeyDown={(event) => { if (!disabled && (event.key === "Enter" || event.key === " ")) onToggle(index); }} key={index}><text x={x - 36} y={y + 7} fill="#68645e" fontSize="17" fontWeight="800" textAnchor="middle">{index + 1}</text><rect x={x - 23} y={y - 15} width="54" height="31" rx="7" fill={value === "1" ? "#d77459" : "#85837e"} stroke="#4e4d49" strokeWidth="5" /><path d={`M${x - 14} ${y - 6}h36`} stroke="#eeeae1" strokeWidth="4" strokeLinecap="round" opacity=".65" /></g>; })}
+            <rect x={type === "ten-pin" ? 95 : 105} y={type === "ten-pin" ? 135 : 145} width={type === "ten-pin" ? 230 : 210} height={type === "ten-pin" ? 240 : 220} rx={type === "ten-pin" ? 29 : 26} fill={bodyColor} stroke="#56514b" strokeWidth="12" />
+            {values.map((value, index) => { const column = index % 2; const row = Math.floor(index / 2); const rows = values.length / 2; const pinNumber = row + 1 + column * rows; const x = 170 + column * 90; const y = rows === 5 ? 176 + row * 38 : 183 + row * 48; return <g className="direct-pin" role="button" tabIndex={disabled ? -1 : 0} aria-disabled={disabled} aria-pressed={value === "1"} aria-label={`Pin ${pinNumber}`} onClick={() => { if (!disabled) onToggle(index); }} onKeyDown={(event) => { if (!disabled && (event.key === "Enter" || event.key === " ")) onToggle(index); }} key={index}><text x={x - 36} y={y + 7} fill="#68645e" fontSize="17" fontWeight="800" textAnchor="middle">{pinNumber}</text><rect className="pin-well" x={x - 23} y={y - 10} width="54" height="31" rx="7" fill="#434446" stroke="#38393a" strokeWidth="5" /><g className={`pin-cap${value === "1" ? " is-pressed" : ""}`}><rect x={x - 23} y={y - 15} width="54" height="31" rx="7" fill={value === "1" ? "#56585a" : "#898a88"} stroke="#4e4d49" strokeWidth="5" /><path d={`M${x - 14} ${y - 6}h36`} stroke="#f1eee8" strokeWidth="4" strokeLinecap="round" opacity={value === "1" ? ".28" : ".68"} /></g></g>; })}
+            <g className="pin-lock-latch"><rect x="185" y={type === "ten-pin" ? 372 : 362} width="14" height="17" rx="4" fill="#686864" stroke="#4d4945" strokeWidth="4" /><rect x="196" y={type === "ten-pin" ? 377 : 367} width="44" height="16" rx="5" fill="url(#interactive-chrome)" stroke="#56514b" strokeWidth="5" /></g>
           </g>
         ) : type === "vertical-word" ? (
           <g className="interactive-lock-body vertical-word-body">
@@ -182,7 +185,7 @@ export function InteractiveLock({ type, values, choices, open, disabled = false,
             <path d="M52 178 86 143h248l34 35v155l-34 32H86l-34-32Z" fill={bodyColor} stroke="#554139" strokeWidth="12" />
             {values.map((value, index) => (
               <g className={`direct-wheel${draggingWheel === index ? " is-dragging" : ""}`} role="button" tabIndex={disabled ? -1 : 0} aria-disabled={disabled} aria-label={`Wheel ${index + 1}, ${value}`} key={index} transform={`translate(${controlsStart + index * (wheelWidth + wheelGap)} 175)`} onPointerDown={(event) => { if (disabled) return; event.currentTarget.setPointerCapture(event.pointerId); wheelStart.current = { index, x: event.clientX, y: event.clientY }; setDraggingWheel(index); }} onPointerMove={(event) => moveWheel(event, index)} onPointerUp={(event) => finishWheel(event, index)} onPointerCancel={() => cancelWheel(index)} onKeyDown={(event) => { if (disabled) return; if (event.key === "ArrowUp") onCycle(index, 1); if (event.key === "ArrowDown") onCycle(index, -1); }}>
-                <rect width={wheelWidth} height="145" rx="8" fill="#28292b" stroke="#4b3b34" strokeWidth="5" />
+                <rect width={wheelWidth} height="145" rx="8" fill={wheelColor} stroke="#4b3b34" strokeWidth="5" />
                 <clipPath id={`wheel-window-${index}`}><rect x="3" y="3" width={wheelWidth - 6} height="139" rx="5" /></clipPath>
                 <g clipPath={`url(#wheel-window-${index})`}>
                   <g className={`wheel-strip${settlingWheels.includes(index) ? " is-settling" : ""}`} style={{ transform: `translateY(${wheelOffsets[index] ?? 0}px)` }}>

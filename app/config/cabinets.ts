@@ -1,9 +1,12 @@
 export type LockType =
   | "five-letter"
+  | "five-letter-red"
+  | "five-letter-blue"
   | "direction-red"
   | "direction-black"
   | "direction-light-blue"
   | "eight-pin"
+  | "ten-pin"
   | "four-number-dials"
   | "five-number-dials"
   | "vertical-word";
@@ -28,7 +31,7 @@ export const sectionCounts = [12, 13, 11, 14, 10, 15, 13, 12] as const;
 
 // Change this sequence to control how lock designs are assigned to cabinets.
 export const lockPattern: LockType[] = [
-  "five-letter",
+  "five-letter-red",
   "direction-red",
   "eight-pin",
   "four-number-dials",
@@ -36,16 +39,21 @@ export const lockPattern: LockType[] = [
   "five-number-dials",
   "vertical-word",
   "direction-light-blue",
+  "five-letter-blue",
+  "ten-pin",
 ];
 
 // Visual source for each illustrated lock. These files are design references;
 // the interface renders reusable SVG components rather than the raster images.
 export const lockReferences: Record<LockType, string> = {
   "five-letter": "/reference/word-lock-5.png",
+  "five-letter-red": "/reference/word-lock-5.png",
+  "five-letter-blue": "/reference/word-lock-5.png",
   "direction-red": "/reference/direction-lock-red.png",
   "direction-black": "/reference/direction-lock-red.png",
   "direction-light-blue": "/reference/direction-lock-red.png",
   "eight-pin": "/reference/ten-pin-lock.png",
+  "ten-pin": "/reference/ten-pin-lock.png",
   "four-number-dials": "/reference/num-dial-lock-horizontal.png",
   "five-number-dials": "/reference/num-vertical-lock.png",
   "vertical-word": "/reference/word-vertical-lock.png",

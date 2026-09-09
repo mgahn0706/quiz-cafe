@@ -36,16 +36,27 @@ a { color: inherit; text-decoration: none; }
 .scene-2 .cabinet, .scene-5 .cabinet, .scene-8 .cabinet { color: #956047; }.scene-3 .cabinet, .scene-6 .cabinet { color: #7e6850; }
 .cabinet > svg:first-child { display: block; filter: drop-shadow(0 3px 2px rgba(39,23,18,.25)); height: 100%; width: 100%; }
 .cabinet > span { align-items: center; background: #f4dfb8; border: 1.5px solid #624235; border-radius: 3px; box-shadow: 0 2px 0 rgba(58,35,27,.22); display: flex; font-family: Georgia, serif; font-size: clamp(10px, 3vw, 16px); font-weight: 700; height: 24%; justify-content: center; left: 38%; line-height: 1; position: absolute; top: 36%; transform: translate(-50%, -50%); width: 40%; }
-.cabinet-lock { filter: drop-shadow(0 3px 2px rgba(42,25,19,.32)); height: 46%; left: 76%; pointer-events: none; position: absolute; top: 48%; transform: translateX(-50%) rotate(var(--lock-angle, 0deg)); transform-origin: 50% 5%; transition: transform .82s cubic-bezier(.2, 1.55, .32, 1); width: 50%; }
+.cabinet-lock { filter: drop-shadow(0 3px 2px rgba(42,25,19,.32)); height: 46%; left: 76%; overflow: visible; pointer-events: none; position: absolute; top: 48%; transform: translateX(-50%) rotate(var(--lock-angle, 0deg)); transform-origin: 50% 5%; transition: transform .82s cubic-bezier(.2, 1.55, .32, 1); width: 50%; }
 .cabinet-lock--letters, .cabinet-lock--side-numbers, .cabinet-lock--inline-numbers { width: 52%; }
 .cabinet-lock--direction { height: 49%; width: 40%; }
 .cabinet-lock--pins { width: 49%; }
+.cabinet-lock--ten-pins { height: 52%; width: 46%; }
 .cabinet-lock--vertical-word { height: 49%; width: 47%; }
+.cabinet-knob-overlay { background: radial-gradient(circle at 35% 30%, #fff0bd 0 14%, #f2c879 20% 58%, #a66b35 75% 100%); border: 1.5px solid #593b2e; border-radius: 50%; box-shadow: 0 1px 2px rgba(45,27,20,.35); height: 10%; left: 76%; pointer-events: none; position: absolute; top: 51%; transform: translate(-50%, -50%); width: 10%; z-index: 3; }
 .cabinet-lock-host { display: contents; }
-.lock-shackle { transform-box: fill-box; transform-origin: 18% 92%; transition: transform .5s cubic-bezier(.2,1.35,.3,1); }
-.lock-body { transform-box: fill-box; transform-origin: 20% 8%; transition: transform .65s cubic-bezier(.18,1.25,.32,1); }
-.cabinet-lock-host.is-open .lock-shackle { transform: translate(8px, -7px) rotate(29deg); }
-.cabinet-lock-host.is-open .lock-body { transform: translate(-1px, -1px) rotate(13deg); }
+.cabinet-lock-host:not(.is-open) .cabinet-lock { top: 46%; }
+.lock-shackle { transition: opacity .28s ease; }
+.lock-shackle--opened { opacity: 0; }
+.lock-body { transform-box: view-box; transition: transform .65s cubic-bezier(.18,1.25,.32,1); }
+.cabinet-lock--letters .lock-body { transform-origin: 30px 32px; }
+.cabinet-lock--direction .lock-body { transform-origin: 24px 35px; }
+.cabinet-lock--pins .lock-body { transform-origin: 25px 32px; }
+.cabinet-lock--side-numbers .lock-body { transform-origin: 25px 34px; }
+.cabinet-lock--inline-numbers .lock-body { transform-origin: 27px 38px; }
+.cabinet-lock--vertical-word .lock-body { transform-origin: 26px 34px; }
+.cabinet-lock-host.is-open .lock-shackle--closed { opacity: 0; }
+.cabinet-lock-host.is-open .lock-shackle--opened { opacity: 1; }
+.cabinet-lock-host.is-open .lock-body { transform: rotate(17deg); }
 .cabinet-lock-host.is-open .cabinet-lock { filter: drop-shadow(0 5px 3px rgba(42,25,19,.38)); }
 .cabinet:nth-child(3n+2) .cabinet-lock { transition-delay: .025s; }
 .cabinet:nth-child(3n) .cabinet-lock { transition-delay: .05s; }
@@ -141,10 +152,13 @@ button:focus-visible, a:focus-visible { outline: 3px solid #ffc56e; outline-offs
 .lock-clue { background: #efe0c9; border: 1px solid #d9c09f; border-radius: 999px; color: #755244; display: inline-flex; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 900; letter-spacing: .18em; min-height: 34px; padding: 8px 14px; }
 .direct-lock-area { align-items: center; display: flex; height: clamp(330px, 50vh, 500px); justify-content: center; margin: -12px 0 -18px; width: 100%; }
 .interactive-lock { filter: drop-shadow(0 18px 14px rgba(62,39,30,.2)); height: 100%; max-width: 560px; overflow: visible; touch-action: none; width: 100%; }
-.interactive-shackle { transform-box: fill-box; transform-origin: 16% 92%; transition: transform .55s cubic-bezier(.2,1.35,.3,1); }
-.interactive-lock-body { transform-box: fill-box; transform-origin: 20% 8%; transition: transform .75s cubic-bezier(.18,1.25,.32,1); }
-.interactive-lock.is-open .interactive-shackle { transform: translate(42px,-26px) rotate(27deg); }
-.interactive-lock.is-open .interactive-lock-body { transform: translate(-5px,-3px) rotate(12deg); }
+.interactive-lock:not(.is-open) { transform: translateY(-8px); }
+.interactive-shackle { transition: opacity .3s ease; }
+.interactive-shackle--opened { opacity: 0; }
+.interactive-lock-body { transform-box: view-box; transform-origin: 130px 165px; transition: transform .75s cubic-bezier(.18,1.25,.32,1); }
+.interactive-lock.is-open .interactive-shackle--closed { opacity: 0; }
+.interactive-lock.is-open .interactive-shackle--opened { opacity: 1; }
+.interactive-lock.is-open .interactive-lock-body { transform: rotate(16deg); }
 .interactive-shackle.is-reset-control { cursor: pointer; outline: none; }
 .interactive-shackle.is-reset-control:hover { filter: brightness(1.12); }
 .interactive-shackle.is-resetting { animation: ring-reset-bounce .6s ease-in-out; }
@@ -170,6 +184,9 @@ button:focus-visible, a:focus-visible { outline: 3px solid #ffc56e; outline-offs
 .word-ring-shade--right { fill: url("#word-fade-right"); }
 .direct-wheel:hover rect:first-of-type, .direct-wheel:focus-visible rect:first-of-type { filter: brightness(1.18); }
 .direct-pin:hover rect, .direct-pin:focus-visible rect { filter: brightness(1.12); }
+.direct-pin .pin-well { filter: none; }
+.pin-cap { transform-box: fill-box; transition: transform .14s cubic-bezier(.2,.75,.3,1); }
+.pin-cap.is-pressed { transform: translateY(5px); }
 .direction-pad:hover, .direction-pad:focus-visible { filter: brightness(1.1); }
 .direction-knob { transform-box: fill-box; transform-origin: center; will-change: transform; }
 .direction-knob.is-settling { transition: transform .32s cubic-bezier(.2,1.45,.35,1); }
