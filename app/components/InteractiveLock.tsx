@@ -1,12 +1,12 @@
 "use client";
 
 import { PointerEvent, useEffect, useRef, useState } from "react";
-import type { LockType } from "../config/cabinets";
+import type { LockType } from "../game/puzzles";
 
 type InteractiveLockProps = {
   type: LockType;
   values: string[];
-  choices: string[];
+  choices: readonly string[];
   open: boolean;
   disabled?: boolean;
   onCycle: (index: number, direction: number) => void;

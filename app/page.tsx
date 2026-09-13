@@ -1,9 +1,10 @@
 "use client";
 
-import { CSSProperties, KeyboardEvent, PointerEvent, TransitionEvent, useEffect, useRef, useState } from "react";
+import { CSSProperties, KeyboardEvent, PointerEvent, TransitionEvent, useRef, useState } from "react";
 import { CabinetLock } from "./components/CabinetLock";
 import { LockChallenge } from "./components/LockChallenge";
-import { backgroundOffsets, cabinetSections, roomNames } from "./config/cabinets";
+import { backgroundOffsets, puzzleSections, roomNames } from "./config/cabinets";
+import { useGameSession } from "./game/GameSessionContext";
 
 function Mark() {
   return (
@@ -86,8 +87,7 @@ function LibraryCafe() {
 
 const cafeArtwork = { continuous: WindowCafe, details: [BarCafe, LibraryCafe] };
 const ContinuousScene = cafeArtwork.continuous;
-const carouselItems = [cabinetSections.length - 1, ...cabinetSections.map((_, index) => index), 0];
-const unlockedStorageKey = "quiz-cafe-unlocked-cabinets";
+const carouselItems = [puzzleSections.length - 1, ...puzzleSections.map((_, index) => index), 0];
 
 function Arrow({ back = false }: { back?: boolean }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" className={back ? "back" : ""}><path d="M5 12h14M14 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -140,6 +140,7 @@ function releaseLocks(container: HTMLDivElement, angle: number) {
 }
 
 export default function Home() {
+  const { isSolved, submitAttempt } = useGameSession();
   const [slide, setSlide] = useState(0);
   const [position, setPosition] = useState(1);
   const [dragX, setDragX] = useState(0);
@@ -149,7 +150,6 @@ export default function Home() {
   const [arrowMotion, setArrowMotion] = useState<"previous" | "next" | null>(null);
   const [message, setMessage] = useState("");
   const [selectedCabinet, setSelectedCabinet] = useState<number | null>(null);
-  const [unlockedCabinets, setUnlockedCabinets] = useState<number[]>([]);
   const gesture = useRef({ x: 0, time: 0, lastX: 0, lastTime: 0, velocity: 0 });
   const didDrag = useRef(false);
   const draggingRef = useRef(false);
@@ -158,25 +158,6 @@ export default function Home() {
   const lastLockAngle = useRef(0);
   const completedSwipe = useRef(false);
   const jingleTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      try {
-        const stored = JSON.parse(window.localStorage.getItem(unlockedStorageKey) ?? "[]");
-        if (Array.isArray(stored)) setUnlockedCabinets(stored.filter((value): value is number => Number.isInteger(value) && value >= 1 && value <= 100));
-      } catch { /* Ignore malformed local data and start locked. */ }
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  const markCabinetSolved = (cabinetNumber: number) => {
-    setUnlockedCabinets((current) => {
-      if (current.includes(cabinetNumber)) return current;
-      const next = [...current, cabinetNumber].sort((a, b) => a - b);
-      window.localStorage.setItem(unlockedStorageKey, JSON.stringify(next));
-      return next;
-    });
-  };
 
   const triggerJingle = (carousel: HTMLDivElement) => {
     carousel.querySelectorAll<SVGSVGElement>('.scene[aria-hidden="false"] .cabinet-lock').forEach((lock) => {
@@ -198,7 +179,7 @@ export default function Home() {
     setTransitioning(true);
     setDragX(0);
     setPosition((current) => current + direction);
-    setSlide((current) => (current + direction + cabinetSections.length) % cabinetSections.length);
+    setSlide((current) => (current + direction + puzzleSections.length) % puzzleSections.length);
     completedSwipe.current = jingleOnComplete;
   };
   const clickArrow = (direction: number) => {
@@ -266,9 +247,9 @@ export default function Home() {
     const shouldJingle = completedSwipe.current;
     completedSwipe.current = false;
     const carousel = event.currentTarget.parentElement as HTMLDivElement | null;
-    if (position === 0 || position === cabinetSections.length + 1) {
+    if (position === 0 || position === puzzleSections.length + 1) {
       setTransitioning(false);
-      setPosition(position === 0 ? cabinetSections.length : 1);
+      setPosition(position === 0 ? puzzleSections.length : 1);
       requestAnimationFrame(() => requestAnimationFrame(() => {
         setTransitioning(true);
         if (shouldJingle && carousel) triggerJingle(carousel);
@@ -284,12 +265,12 @@ export default function Home() {
   const chooseCabinet = (cabinet: number) => {
     setSelectedCabinet(cabinet);
   };
-  const selectedCabinetData = selectedCabinet === null ? undefined : cabinetSections.flat().find((cabinet) => cabinet.number === selectedCabinet);
+  const selectedPuzzle = selectedCabinet === null ? undefined : puzzleSections.flat().find((puzzle) => puzzle.id === selectedCabinet);
   return (
     <main className="experience">
       <header className="floating-header">
         <a className="cafe-brand" href="#" aria-label="Quiz Café home"><Mark /><span>Quiz Café</span></a>
-        <div className="room-count"><span>{String(slide + 1).padStart(2, "0")}</span><i />{String(cabinetSections.length).padStart(2, "0")}</div>
+        <div className="room-count"><span>{String(slide + 1).padStart(2, "0")}</span><i />{String(puzzleSections.length).padStart(2, "0")}</div>
         <button type="button" className="menu-button" aria-label="Open menu" onClick={() => setMessage("The café menu is coming soon.")}><span /><span /></button>
       </header>
 
@@ -302,17 +283,17 @@ export default function Home() {
             <section className={`scene scene-${roomIndex + 1}`} aria-hidden={!isActive} key={`${roomNames[roomIndex]}-${itemIndex}`}>
               <div className="cabinet-wall">
                 <div className="cabinet-plaque"><span>{roomNames[roomIndex]}</span></div>
-                <div className={`cabinet-grid cabinets-${cabinetSections[roomIndex].length}`}>
-                  {cabinetSections[roomIndex].map((cabinet) => (
-                    <button type="button" tabIndex={isActive ? 0 : -1} className={selectedCabinet === cabinet.number ? "cabinet selected" : "cabinet"} onClick={() => { if (!didDrag.current) chooseCabinet(cabinet.number); }} aria-label={`Select cabinet ${cabinet.number}, ${cabinet.lock.replaceAll("-", " ")} lock`} key={cabinet.number}>
+                <div className={`cabinet-grid cabinets-${puzzleSections[roomIndex].length}`}>
+                  {puzzleSections[roomIndex].map((puzzle) => (
+                    <button type="button" tabIndex={isActive ? 0 : -1} className={selectedCabinet === puzzle.id ? "cabinet selected" : "cabinet"} onClick={() => { if (!didDrag.current) chooseCabinet(puzzle.id); }} aria-label={`Select cabinet ${puzzle.id}, ${puzzle.lockType.replaceAll("-", " ")} lock`} key={puzzle.id}>
                       <svg viewBox="0 0 100 100" aria-hidden="true">
                         <rect x="4" y="4" width="92" height="92" rx="5" fill="currentColor" stroke="#52362b" strokeWidth="4" />
                         <rect x="12" y="12" width="76" height="76" rx="2" fill="none" stroke="#f4d9b6" strokeOpacity=".28" strokeWidth="3" />
                         <path d="M17 21h66M17 79h66" stroke="#4f3027" strokeOpacity=".28" strokeWidth="2" />
                         <circle cx="76" cy="51" r="5" fill="#f2c879" stroke="#593b2e" strokeWidth="2" />
                       </svg>
-                      <span>{cabinet.number}</span>
-                      <CabinetLock type={cabinet.lock} open={unlockedCabinets.includes(cabinet.number)} />
+                      <span>{puzzle.id}</span>
+                      <CabinetLock type={puzzle.lockType} open={isSolved(puzzle.id)} />
                       <i className="cabinet-knob-overlay" aria-hidden="true" />
                     </button>
                   ))}
@@ -330,7 +311,7 @@ export default function Home() {
       </div>
 
       <div className={message ? "scene-toast visible" : "scene-toast"} role="status">{message}</div>
-      {selectedCabinetData && <LockChallenge cabinet={selectedCabinetData} solved={unlockedCabinets.includes(selectedCabinetData.number)} onClose={() => setSelectedCabinet(null)} onSolved={markCabinetSolved} />}
+      {selectedPuzzle && <LockChallenge puzzle={selectedPuzzle} solved={isSolved(selectedPuzzle.id)} onClose={() => setSelectedCabinet(null)} onSubmit={submitAttempt} />}
     </main>
   );
 }

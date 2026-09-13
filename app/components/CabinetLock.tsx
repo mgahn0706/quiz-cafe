@@ -1,4 +1,4 @@
-import type { LockType } from "../config/cabinets";
+import type { LockType } from "../game/puzzles";
 
 type CabinetLockProps = { type: LockType; open?: boolean };
 

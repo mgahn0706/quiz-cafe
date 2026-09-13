@@ -1,20 +1,5 @@
-export type LockType =
-  | "five-letter"
-  | "five-letter-red"
-  | "five-letter-blue"
-  | "direction-red"
-  | "direction-black"
-  | "direction-light-blue"
-  | "eight-pin"
-  | "ten-pin"
-  | "four-number-dials"
-  | "five-number-dials"
-  | "vertical-word";
-
-export type CabinetData = {
-  number: number;
-  lock: LockType;
-};
+import { puzzles } from "../game/puzzles";
+import type { LockType } from "../game/puzzles";
 
 export const roomNames = [
   "Window wall",
@@ -28,20 +13,6 @@ export const roomNames = [
 ] as const;
 
 export const sectionCounts = [12, 13, 11, 14, 10, 15, 13, 12] as const;
-
-// Change this sequence to control how lock designs are assigned to cabinets.
-export const lockPattern: LockType[] = [
-  "five-letter-red",
-  "direction-red",
-  "eight-pin",
-  "four-number-dials",
-  "direction-black",
-  "five-number-dials",
-  "vertical-word",
-  "direction-light-blue",
-  "five-letter-blue",
-  "ten-pin",
-];
 
 // Visual source for each illustrated lock. These files are design references;
 // the interface renders reusable SVG components rather than the raster images.
@@ -59,19 +30,11 @@ export const lockReferences: Record<LockType, string> = {
   "vertical-word": "/reference/word-vertical-lock.png",
 };
 
-const orderedCabinets: CabinetData[] = Array.from(
-  { length: 100 },
-  (_, index) => ({
-    number: index + 1,
-    lock: lockPattern[index % lockPattern.length],
-  }),
-);
-
-export const cabinetSections = sectionCounts.map((count, index) => {
+export const puzzleSections = sectionCounts.map((count, index) => {
   const start = sectionCounts
     .slice(0, index)
     .reduce((sum, size) => sum + size, 0);
-  return orderedCabinets.slice(start, start + count);
+  return puzzles.slice(start, start + count);
 });
 
 export const backgroundOffsets = [-18, -12, -6, 0, 6, 12, 18, 0] as const;
