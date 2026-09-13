@@ -1,5 +1,5 @@
 import { getPuzzleById } from "../puzzles";
-import type { GameState, AttemptResult } from "../session";
+import type { GameState, AttemptResult, MemberIdentity } from "../session";
 import { validateAttempt } from "../validation";
 
 export type AuthoritativeState = {
@@ -17,6 +17,7 @@ export function processAuthoritativeAttempt(
   current: AuthoritativeState,
   puzzleId: number,
   submittedValues: readonly string[],
+  member?: MemberIdentity,
 ): AuthoritativeAttempt {
   const puzzle = getPuzzleById(puzzleId);
   if (!puzzle || !validateAttempt(puzzle, submittedValues)) {
@@ -39,6 +40,9 @@ export function processAuthoritativeAttempt(
     next: {
       gameState: {
         solvedPuzzleIds: [...current.gameState.solvedPuzzleIds, puzzleId].sort((a, b) => a - b),
+        solveAttributions: member
+          ? [...current.gameState.solveAttributions, { puzzleId, member }]
+          : current.gameState.solveAttributions,
       },
       revision: current.revision + 1,
     },

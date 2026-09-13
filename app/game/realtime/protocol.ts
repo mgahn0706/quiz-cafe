@@ -1,14 +1,17 @@
-export const realtimeProtocolVersion = 1 as const;
+import { isMemberIdentity } from "../member";
+import type { MemberIdentity, SolveAttribution } from "../session";
+
+export const realtimeProtocolVersion = 2 as const;
 
 export type ParticipantToHostMessage =
-  | { type: "HELLO"; protocolVersion: typeof realtimeProtocolVersion }
+  | { type: "HELLO"; protocolVersion: typeof realtimeProtocolVersion; member: MemberIdentity }
   | { type: "SUBMIT_ATTEMPT"; requestId: string; puzzleId: number; answer: string[] }
   | { type: "REQUEST_SNAPSHOT" };
 
 export type HostToParticipantMessage =
-  | { type: "SNAPSHOT"; revision: number; solvedPuzzleIds: number[]; puzzleIds: number[]; totalPuzzleCount: number }
+  | { type: "SNAPSHOT"; revision: number; solvedPuzzleIds: number[]; solveAttributions: SolveAttribution[]; puzzleIds: number[]; totalPuzzleCount: number }
   | { type: "ATTEMPT_RESULT"; requestId: string; puzzleId: number; correct: boolean; alreadySolved: boolean }
-  | { type: "STATE_UPDATE"; revision: number; solvedPuzzleIds: number[] }
+  | { type: "STATE_UPDATE"; revision: number; solvedPuzzleIds: number[]; solveAttributions: SolveAttribution[] }
   | { type: "HOST_ERROR"; code: string; message: string };
 
 type UnknownRecord = Record<string, unknown>;
@@ -39,12 +42,21 @@ function isAnswer(value: unknown): value is string[] {
     && value.every((part) => typeof part === "string" && part.length <= 16);
 }
 
+function isSolveAttributionArray(value: unknown): value is SolveAttribution[] {
+  return Array.isArray(value)
+    && value.length <= 1000
+    && value.every((entry) => {
+      if (!isRecord(entry)) return false;
+      return isPuzzleId(entry.puzzleId) && isMemberIdentity(entry.member);
+    });
+}
+
 export function isParticipantToHostMessage(value: unknown): value is ParticipantToHostMessage {
   if (!isRecord(value) || typeof value.type !== "string") return false;
 
   switch (value.type) {
     case "HELLO":
-      return value.protocolVersion === realtimeProtocolVersion;
+      return value.protocolVersion === realtimeProtocolVersion && isMemberIdentity(value.member);
     case "SUBMIT_ATTEMPT":
       return isRequestId(value.requestId) && isPuzzleId(value.puzzleId) && isAnswer(value.answer);
     case "REQUEST_SNAPSHOT":
@@ -61,6 +73,7 @@ export function isHostToParticipantMessage(value: unknown): value is HostToParti
     case "SNAPSHOT":
       return isRevision(value.revision)
         && isPuzzleIdArray(value.solvedPuzzleIds)
+        && isSolveAttributionArray(value.solveAttributions)
         && isPuzzleIdArray(value.puzzleIds)
         && Number.isInteger(value.totalPuzzleCount)
         && Number(value.totalPuzzleCount) >= 0;
@@ -70,7 +83,9 @@ export function isHostToParticipantMessage(value: unknown): value is HostToParti
         && typeof value.correct === "boolean"
         && typeof value.alreadySolved === "boolean";
     case "STATE_UPDATE":
-      return isRevision(value.revision) && isPuzzleIdArray(value.solvedPuzzleIds);
+      return isRevision(value.revision)
+        && isPuzzleIdArray(value.solvedPuzzleIds)
+        && isSolveAttributionArray(value.solveAttributions);
     case "HOST_ERROR":
       return typeof value.code === "string"
         && value.code.length > 0

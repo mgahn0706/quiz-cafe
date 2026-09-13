@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { DataConnection, Peer as PeerInstance } from "peerjs";
 import { GameSessionProvider } from "../GameSessionContext";
-import type { AttemptResult, GameSession, GameState, SubmitAttempt } from "../session";
+import type { AttemptResult, GameSession, GameState, MemberIdentity, SubmitAttempt } from "../session";
 import { realtimeDebug } from "./debug";
 import { isSafePeerId } from "./host-id";
 import {
@@ -15,7 +15,7 @@ import {
 import type { ParticipantToHostMessage } from "./protocol";
 
 const attemptTimeoutMs = 10_000;
-const initialState: GameState = { solvedPuzzleIds: [] };
+const initialState: GameState = { solvedPuzzleIds: [], solveAttributions: [] };
 
 type PendingAttempt = {
   puzzleId: number;
@@ -41,9 +41,11 @@ function unavailableResult(
 
 export function ParticipantPeerGameSessionProvider({
   hostPeerId,
+  member,
   children,
 }: {
   hostPeerId: string;
+  member: MemberIdentity;
   children: ReactNode;
 }) {
   const validHostPeerId = isSafePeerId(hostPeerId);
@@ -125,7 +127,7 @@ export function ParticipantPeerGameSessionProvider({
         retryAttempt = 0;
         setConnectionStatus("connected");
         setConnectionMessage("Connected to the room board");
-        sendMessage(nextConnection, { type: "HELLO", protocolVersion: realtimeProtocolVersion });
+        sendMessage(nextConnection, { type: "HELLO", protocolVersion: realtimeProtocolVersion, member });
         realtimeDebug("participant", "participant connected");
       });
 
@@ -135,7 +137,7 @@ export function ParticipantPeerGameSessionProvider({
         if (data.type === "SNAPSHOT") {
           if (data.revision < latestRevisionRef.current) return;
           latestRevisionRef.current = data.revision;
-          setState({ solvedPuzzleIds: data.solvedPuzzleIds });
+          setState({ solvedPuzzleIds: data.solvedPuzzleIds, solveAttributions: data.solveAttributions });
           setPuzzleIds(data.puzzleIds);
           setTotalPuzzleCount(data.totalPuzzleCount);
           setReady(true);
@@ -146,7 +148,7 @@ export function ParticipantPeerGameSessionProvider({
         if (data.type === "STATE_UPDATE") {
           if (!shouldApplyRevision(latestRevisionRef.current, data.revision)) return;
           latestRevisionRef.current = data.revision;
-          setState({ solvedPuzzleIds: data.solvedPuzzleIds });
+          setState({ solvedPuzzleIds: data.solvedPuzzleIds, solveAttributions: data.solveAttributions });
           return;
         }
 
@@ -215,7 +217,7 @@ export function ParticipantPeerGameSessionProvider({
       connection?.close();
       peer?.destroy();
     };
-  }, [hostPeerId, rejectPendingAttempts, validHostPeerId]);
+  }, [hostPeerId, member, rejectPendingAttempts, validHostPeerId]);
 
   const submitAttempt = useCallback<SubmitAttempt>(async (puzzleId, submittedValues) => {
     const connection = connectionRef.current;
@@ -258,9 +260,10 @@ export function ParticipantPeerGameSessionProvider({
     ready,
     connectionStatus,
     connectionMessage,
+    currentMember: member,
     isSolved,
     submitAttempt,
-  }), [connectionMessage, connectionStatus, isSolved, puzzleIds, ready, state, submitAttempt, totalPuzzleCount]);
+  }), [connectionMessage, connectionStatus, isSolved, member, puzzleIds, ready, state, submitAttempt, totalPuzzleCount]);
 
   return <GameSessionProvider session={session}>{children}</GameSessionProvider>;
 }

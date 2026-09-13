@@ -1,7 +1,10 @@
 import { getPuzzleById } from "./puzzles";
+import { isMemberIdentity } from "./member";
+import type { SolveAttribution } from "./session";
 
 export const solvedPuzzleStorageKey = "quiz-cafe-unlocked-cabinets";
 const hostRevisionStorageKey = "quiz-cafe-host-revision";
+const solveAttributionsStorageKey = "quiz-cafe-solve-attributions";
 
 export function loadSolvedPuzzleIds() {
   if (typeof window === "undefined") return [];
@@ -55,6 +58,39 @@ export function saveHostRevision(revision: number) {
 
   try {
     window.localStorage.setItem(hostRevisionStorageKey, String(revision));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function loadSolveAttributions(solvedPuzzleIds: readonly number[]) {
+  if (typeof window === "undefined") return [];
+  const solvedIds = new Set(solvedPuzzleIds);
+
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(solveAttributionsStorageKey) ?? "[]");
+    if (!Array.isArray(stored)) return [];
+
+    const seen = new Set<number>();
+    return stored.filter((value): value is SolveAttribution => {
+      if (typeof value !== "object" || value === null) return false;
+      const candidate = value as Record<string, unknown>;
+      if (!Number.isInteger(candidate.puzzleId) || !solvedIds.has(candidate.puzzleId as number)) return false;
+      if (seen.has(candidate.puzzleId as number) || !isMemberIdentity(candidate.member)) return false;
+      seen.add(candidate.puzzleId as number);
+      return true;
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function saveSolveAttributions(attributions: readonly SolveAttribution[]) {
+  if (typeof window === "undefined") return false;
+
+  try {
+    window.localStorage.setItem(solveAttributionsStorageKey, JSON.stringify(attributions));
     return true;
   } catch {
     return false;

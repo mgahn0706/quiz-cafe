@@ -8,7 +8,7 @@ import type { GameSession, GameState, SubmitAttempt } from "./session";
 import { loadSolvedPuzzleIds, saveSolvedPuzzleIds, subscribeToSolvedPuzzleIds } from "./storage";
 import { validateAttempt } from "./validation";
 
-const initialState: GameState = { solvedPuzzleIds: [] };
+const initialState: GameState = { solvedPuzzleIds: [], solveAttributions: [] };
 const puzzleIds = puzzles.map((puzzle) => puzzle.id);
 
 export function LocalGameSessionProvider({ children }: { children: ReactNode }) {
@@ -18,7 +18,7 @@ export function LocalGameSessionProvider({ children }: { children: ReactNode }) 
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const restoredState = { solvedPuzzleIds: loadSolvedPuzzleIds() };
+      const restoredState = { solvedPuzzleIds: loadSolvedPuzzleIds(), solveAttributions: [] };
       stateRef.current = restoredState;
       setState(restoredState);
       setReady(true);
@@ -27,7 +27,7 @@ export function LocalGameSessionProvider({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => subscribeToSolvedPuzzleIds((solvedPuzzleIds) => {
-    const nextState = { solvedPuzzleIds };
+    const nextState = { solvedPuzzleIds, solveAttributions: [] };
     stateRef.current = nextState;
     setState(nextState);
   }), []);
@@ -41,7 +41,7 @@ export function LocalGameSessionProvider({ children }: { children: ReactNode }) 
     const alreadySolved = stateRef.current.solvedPuzzleIds.includes(puzzleId);
     if (!alreadySolved) {
       const solvedPuzzleIds = [...stateRef.current.solvedPuzzleIds, puzzleId].sort((a, b) => a - b);
-      const nextState = { solvedPuzzleIds };
+      const nextState = { solvedPuzzleIds, solveAttributions: stateRef.current.solveAttributions };
       stateRef.current = nextState;
       setState(nextState);
       saveSolvedPuzzleIds(solvedPuzzleIds);

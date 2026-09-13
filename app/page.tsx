@@ -1,13 +1,15 @@
 "use client";
 
-import { CSSProperties, KeyboardEvent, PointerEvent, Suspense, TransitionEvent, useRef, useState } from "react";
+import { CSSProperties, FormEvent, KeyboardEvent, PointerEvent, Suspense, TransitionEvent, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CabinetLock } from "./components/CabinetLock";
 import { LockChallenge } from "./components/LockChallenge";
 import { backgroundOffsets, puzzleSections, roomNames } from "./config/cabinets";
 import { useGameSession } from "./game/GameSessionContext";
 import { LocalGameSessionProvider } from "./game/LocalGameSessionProvider";
+import { loadMemberIdentity, nicknameMaxLength, saveMemberIdentity } from "./game/member";
 import { ParticipantPeerGameSessionProvider } from "./game/realtime/ParticipantPeerGameSessionProvider";
+import type { MemberIdentity } from "./game/session";
 
 function Mark() {
   return (
@@ -322,11 +324,73 @@ function Home() {
   );
 }
 
+function NicknameDialog({
+  currentMember,
+  onSave,
+  onCancel,
+}: {
+  currentMember: MemberIdentity | null;
+  onSave: (member: MemberIdentity) => void;
+  onCancel?: () => void;
+}) {
+  const [nickname, setNickname] = useState(currentMember?.nickname ?? "");
+  const [nicknameError, setNicknameError] = useState("");
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const member = saveMemberIdentity(nickname, currentMember);
+    if (member) {
+      onSave(member);
+      return;
+    }
+    setNicknameError("Enter a nickname using visible characters.");
+  };
+
+  return (
+    <div className="nickname-gate">
+      <form className="nickname-card" onSubmit={submit} aria-labelledby="nickname-title">
+        <Mark />
+        <span>Problem Room</span>
+        <h1 id="nickname-title">Choose your nickname</h1>
+        <p>The board will celebrate who unlocks each puzzle.</p>
+        <label htmlFor="participant-nickname">Nickname</label>
+        <input id="participant-nickname" name="nickname" autoComplete="nickname" autoFocus maxLength={nicknameMaxLength} required value={nickname} onChange={(event) => { setNickname(event.target.value); setNicknameError(""); }} />
+        {nicknameError && <small className="nickname-error" role="alert">{nicknameError}</small>}
+        <div>
+          {onCancel && <button className="nickname-cancel" type="button" onClick={onCancel}>Cancel</button>}
+          <button className="nickname-join" type="submit">{currentMember ? "Save nickname" : "Join room"}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function RemoteParticipantRoute({ hostPeerId }: { hostPeerId: string }) {
+  const [member, setMember] = useState<MemberIdentity | null>();
+  const [editingNickname, setEditingNickname] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setMember(loadMemberIdentity()));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  if (member === undefined) return <main className="experience" aria-label="Loading member" />;
+  if (member === null) return <NicknameDialog currentMember={null} onSave={setMember} />;
+
+  return (
+    <ParticipantPeerGameSessionProvider hostPeerId={hostPeerId} member={member} key={`${hostPeerId}-${member.nickname}`}>
+      <Home />
+      <button className="participant-nickname" type="button" onClick={() => setEditingNickname(true)}><span>Playing as</span>{member.nickname}</button>
+      {editingNickname && <NicknameDialog currentMember={member} onSave={(nextMember) => { setMember(nextMember); setEditingNickname(false); }} onCancel={() => setEditingNickname(false)} />}
+    </ParticipantPeerGameSessionProvider>
+  );
+}
+
 function ParticipantRoute() {
   const hostPeerId = useSearchParams().get("host")?.trim();
 
   if (hostPeerId) {
-    return <ParticipantPeerGameSessionProvider hostPeerId={hostPeerId} key={hostPeerId}><Home /></ParticipantPeerGameSessionProvider>;
+    return <RemoteParticipantRoute hostPeerId={hostPeerId} />;
   }
 
   return <LocalGameSessionProvider><Home /></LocalGameSessionProvider>;

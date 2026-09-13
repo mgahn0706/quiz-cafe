@@ -5,8 +5,8 @@ import type { ReactNode } from "react";
 import type { DataConnection, Peer as PeerInstance } from "peerjs";
 import { GameSessionProvider } from "../GameSessionContext";
 import { puzzles, totalPuzzleCount } from "../puzzles";
-import type { GameSession, GameState, SubmitAttempt } from "../session";
-import { loadHostRevision, loadSolvedPuzzleIds, saveHostRevision, saveSolvedPuzzleIds } from "../storage";
+import type { GameSession, GameState, MemberIdentity, SubmitAttempt } from "../session";
+import { loadHostRevision, loadSolvedPuzzleIds, loadSolveAttributions, saveHostRevision, saveSolvedPuzzleIds, saveSolveAttributions } from "../storage";
 import { processAuthoritativeAttempt } from "./authority";
 import { realtimeDebug } from "./debug";
 import { createJoinUrl, getOrCreateHostPeerId } from "./host-id";
@@ -14,7 +14,7 @@ import { isParticipantToHostMessage } from "./protocol";
 import type { HostToParticipantMessage } from "./protocol";
 import { RecentRequestCache } from "./request-cache";
 
-const initialState: GameState = { solvedPuzzleIds: [] };
+const initialState: GameState = { solvedPuzzleIds: [], solveAttributions: [] };
 const puzzleIds = puzzles.map((puzzle) => puzzle.id);
 const maxHostIdReclaimAttempts = 6;
 
@@ -35,13 +35,16 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
   const [connectedParticipantCount, setConnectedParticipantCount] = useState(0);
   const authorityRef = useRef({ gameState: initialState, revision: 0 });
   const connectionsRef = useRef(new Map<string, DataConnection>());
+  const memberByConnectionRef = useRef(new Map<DataConnection, MemberIdentity>());
+  const memberConnectionsRef = useRef(new Map<string, DataConnection>());
   const processedRequestsRef = useRef(new RecentRequestCache<HostToParticipantMessage>());
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const solvedPuzzleIds = loadSolvedPuzzleIds();
+      const solveAttributions = loadSolveAttributions(solvedPuzzleIds);
       const revision = loadHostRevision(solvedPuzzleIds.length);
-      const restoredState = { solvedPuzzleIds };
+      const restoredState = { solvedPuzzleIds, solveAttributions };
       authorityRef.current = { gameState: restoredState, revision };
       setState(restoredState);
       setReady(true);
@@ -55,23 +58,34 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
       type: "STATE_UPDATE",
       revision,
       solvedPuzzleIds: [...gameState.solvedPuzzleIds],
+      solveAttributions: [...gameState.solveAttributions],
     };
     connectionsRef.current.forEach((connection) => {
       if (connection.open) sendMessage(connection, message);
     });
   }, []);
 
-  const applyAttempt = useCallback<SubmitAttempt>(async (puzzleId, submittedValues) => {
-    const attempt = processAuthoritativeAttempt(authorityRef.current, puzzleId, submittedValues);
+  const applyAuthoritativeAttempt = useCallback(async (
+    puzzleId: number,
+    submittedValues: readonly string[],
+    member?: MemberIdentity,
+  ) => {
+    const attempt = processAuthoritativeAttempt(authorityRef.current, puzzleId, submittedValues, member);
     if (attempt.changed) {
       authorityRef.current = attempt.next;
       setState(attempt.next.gameState);
       saveSolvedPuzzleIds(attempt.next.gameState.solvedPuzzleIds);
+      saveSolveAttributions(attempt.next.gameState.solveAttributions);
       saveHostRevision(attempt.next.revision);
       broadcastState();
     }
     return attempt.result;
   }, [broadcastState]);
+
+  const submitAttempt = useCallback<SubmitAttempt>(
+    (puzzleId, submittedValues) => applyAuthoritativeAttempt(puzzleId, submittedValues),
+    [applyAuthoritativeAttempt],
+  );
 
   useEffect(() => {
     if (!ready) return;
@@ -88,9 +102,15 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
     };
 
     const removeConnection = (connection: DataConnection) => {
-      if (connectionsRef.current.get(connection.peer) !== connection) return;
-      connectionsRef.current.delete(connection.peer);
-      setConnectedParticipantCount(connectionsRef.current.size);
+      if (connectionsRef.current.get(connection.peer) === connection) {
+        connectionsRef.current.delete(connection.peer);
+      }
+      const member = memberByConnectionRef.current.get(connection);
+      memberByConnectionRef.current.delete(connection);
+      if (member && memberConnectionsRef.current.get(member.id) === connection) {
+        memberConnectionsRef.current.delete(member.id);
+      }
+      setConnectedParticipantCount(memberConnectionsRef.current.size);
       realtimeDebug("host", "participant disconnected");
     };
 
@@ -100,6 +120,7 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
         type: "SNAPSHOT",
         revision,
         solvedPuzzleIds: [...gameState.solvedPuzzleIds],
+        solveAttributions: [...gameState.solveAttributions],
         puzzleIds: [...puzzleIds],
         totalPuzzleCount,
       });
@@ -112,8 +133,7 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
         const existing = connectionsRef.current.get(connection.peer);
         if (existing && existing !== connection) existing.close();
         connectionsRef.current.set(connection.peer, connection);
-        setConnectedParticipantCount(connectionsRef.current.size);
-        realtimeDebug("host", "participant connected", { connected: connectionsRef.current.size });
+        realtimeDebug("host", "participant transport connected");
       });
 
       connection.on("data", (data) => {
@@ -122,12 +142,33 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
           return;
         }
 
-        if (data.type === "HELLO" || data.type === "REQUEST_SNAPSHOT") {
+        if (data.type === "HELLO") {
+          const connectionMember = memberByConnectionRef.current.get(connection);
+          if (connectionMember && connectionMember.id !== data.member.id && memberConnectionsRef.current.get(connectionMember.id) === connection) {
+            memberConnectionsRef.current.delete(connectionMember.id);
+          }
+          const previousConnection = memberConnectionsRef.current.get(data.member.id);
+          if (previousConnection && previousConnection !== connection) previousConnection.close();
+          memberByConnectionRef.current.set(connection, data.member);
+          memberConnectionsRef.current.set(data.member.id, connection);
+          setConnectedParticipantCount(memberConnectionsRef.current.size);
+          realtimeDebug("host", "member joined or reconnected", { connected: memberConnectionsRef.current.size });
           sendSnapshot(connection);
           return;
         }
 
-        const cacheKey = `${connection.peer}:${data.requestId}`;
+        const member = memberByConnectionRef.current.get(connection);
+        if (!member) {
+          sendMessage(connection, { type: "HOST_ERROR", code: "HELLO_REQUIRED", message: "Introduce this member before requesting game state." });
+          return;
+        }
+
+        if (data.type === "REQUEST_SNAPSHOT") {
+          sendSnapshot(connection);
+          return;
+        }
+
+        const cacheKey = `${member.id}:${data.requestId}`;
         const cachedResult = processedRequestsRef.current.get(cacheKey);
         if (cachedResult) {
           sendMessage(connection, cachedResult);
@@ -136,7 +177,7 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
         }
 
         realtimeDebug("host", "attempt received", { puzzleId: data.puzzleId });
-        void applyAttempt(data.puzzleId, data.answer).then((result) => {
+        void applyAuthoritativeAttempt(data.puzzleId, data.answer, member).then((result) => {
           const response: HostToParticipantMessage = {
             type: "ATTEMPT_RESULT",
             requestId: data.requestId,
@@ -160,6 +201,8 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
     const closeParticipantConnections = () => {
       connectionsRef.current.forEach((connection) => connection.close());
       connectionsRef.current.clear();
+      memberByConnectionRef.current.clear();
+      memberConnectionsRef.current.clear();
       setConnectedParticipantCount(0);
     };
 
@@ -241,7 +284,7 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
       closeParticipantConnections();
       activePeer?.destroy();
     };
-  }, [applyAttempt, ready]);
+  }, [applyAuthoritativeAttempt, ready]);
 
   const isSolved = useCallback(
     (puzzleId: number) => state.solvedPuzzleIds.includes(puzzleId),
@@ -259,8 +302,8 @@ export function BoardHostGameSessionProvider({ children }: { children: ReactNode
     joinUrl,
     connectedParticipantCount,
     isSolved,
-    submitAttempt: applyAttempt,
-  }), [applyAttempt, connectedParticipantCount, connectionMessage, connectionStatus, isSolved, joinUrl, ready, state]);
+    submitAttempt,
+  }), [connectedParticipantCount, connectionMessage, connectionStatus, isSolved, joinUrl, ready, state, submitAttempt]);
 
   return <GameSessionProvider session={session}>{children}</GameSessionProvider>;
 }

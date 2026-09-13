@@ -1,5 +1,16 @@
+export type MemberIdentity = {
+  readonly id: string;
+  readonly nickname: string;
+};
+
+export type SolveAttribution = {
+  readonly puzzleId: number;
+  readonly member: MemberIdentity;
+};
+
 export type GameState = {
   readonly solvedPuzzleIds: readonly number[];
+  readonly solveAttributions: readonly SolveAttribution[];
 };
 
 export type AttemptResult = {
@@ -26,6 +37,7 @@ export interface GameSession {
   readonly connectionMessage?: string;
   readonly joinUrl?: string;
   readonly connectedParticipantCount?: number;
+  readonly currentMember?: MemberIdentity;
   isSolved(puzzleId: number): boolean;
   submitAttempt: SubmitAttempt;
 }

@@ -9,6 +9,11 @@ import { findNewlySolvedPuzzleIds } from "./board-events";
 
 const unlockDisplayDuration = 1600;
 
+type BoardUnlock = {
+  puzzleId: number;
+  nickname?: string;
+};
+
 function BoardMark() {
   return (
     <svg viewBox="0 0 52 52" aria-hidden="true">
@@ -35,11 +40,12 @@ export default function BoardPage() {
   } = useGameSession();
   const previousSolvedIds = useRef<Set<number> | null>(null);
   const [boardStarted, setBoardStarted] = useState(false);
-  const [unlockQueue, setUnlockQueue] = useState<number[]>([]);
-  const [recentPuzzleId, setRecentPuzzleId] = useState<number | null>(null);
+  const [unlockQueue, setUnlockQueue] = useState<BoardUnlock[]>([]);
+  const [recentUnlock, setRecentUnlock] = useState<BoardUnlock | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState("");
   const [joinLinkCopied, setJoinLinkCopied] = useState(false);
-  const activeUnlockId = unlockQueue[0] ?? null;
+  const activeUnlock = unlockQueue[0] ?? null;
+  const activeUnlockId = activeUnlock?.puzzleId ?? null;
   const remainingPuzzleIds = useMemo(
     () => puzzleIds.filter((puzzleId) => !isSolved(puzzleId)),
     [isSolved, puzzleIds],
@@ -90,24 +96,28 @@ export default function BoardPage() {
       const newlySolvedIds = findNewlySolvedPuzzleIds(previousSolvedIds.current, state.solvedPuzzleIds);
       previousSolvedIds.current = currentSolvedIds;
       if (newlySolvedIds.length > 0) {
-        setUnlockQueue((current) => [...current, ...newlySolvedIds]);
+        const newUnlocks = newlySolvedIds.map((puzzleId) => ({
+          puzzleId,
+          nickname: state.solveAttributions.find((attribution) => attribution.puzzleId === puzzleId)?.member.nickname,
+        }));
+        setUnlockQueue((current) => [...current, ...newUnlocks]);
       }
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [ready, state.solvedPuzzleIds]);
+  }, [ready, state.solveAttributions, state.solvedPuzzleIds]);
 
   useEffect(() => {
-    if (!boardStarted || activeUnlockId === null) return;
+    if (!boardStarted || activeUnlock === null) return;
 
     playUnlockSfx();
     const timer = window.setTimeout(() => {
-      setRecentPuzzleId(activeUnlockId);
-      setUnlockQueue((current) => current[0] === activeUnlockId ? current.slice(1) : current);
+      setRecentUnlock(activeUnlock);
+      setUnlockQueue((current) => current[0]?.puzzleId === activeUnlock.puzzleId ? current.slice(1) : current);
     }, unlockDisplayDuration);
 
     return () => window.clearTimeout(timer);
-  }, [activeUnlockId, boardStarted]);
+  }, [activeUnlock, boardStarted]);
 
   return (
     <main className={`board-shell${isLateGame ? " board-shell--late" : ""}${isComplete ? " board-shell--complete" : ""}`}>
@@ -132,11 +142,12 @@ export default function BoardPage() {
         <div className="board-grid" aria-label="All puzzle statuses">
           {puzzleIds.map((puzzleId) => {
             const solved = isSolved(puzzleId);
+            const solver = state.solveAttributions.find((attribution) => attribution.puzzleId === puzzleId)?.member.nickname;
             const isUnlocking = puzzleId === activeUnlockId && boardStarted;
             return (
               <div
                 className={`board-tile${solved ? " is-solved" : " is-unsolved"}${isUnlocking ? " is-unlocking" : ""}`}
-                aria-label={`Puzzle ${puzzleId}, ${solved ? "solved" : "unsolved"}`}
+                aria-label={`Puzzle ${puzzleId}, ${solved ? solver ? `solved by ${solver}` : "solved" : "unsolved"}`}
                 key={puzzleId}
               >
                 <span>{String(puzzleId).padStart(2, "0")}</span>
@@ -149,8 +160,8 @@ export default function BoardPage() {
         <aside className="board-sidebar">
           <section className="board-recent" aria-live="polite">
             <span>Recently unlocked</span>
-            <strong>{recentPuzzleId === null ? "—" : String(recentPuzzleId).padStart(2, "0")}</strong>
-            <small>{recentPuzzleId === null ? "Waiting for the team" : "Great work, everyone"}</small>
+            <strong>{recentUnlock === null ? "—" : String(recentUnlock.puzzleId).padStart(2, "0")}</strong>
+            <small className={recentUnlock?.nickname ? "board-recent-solver" : undefined}>{recentUnlock === null ? "Waiting for the team" : recentUnlock.nickname ? `${recentUnlock.nickname} solved it` : "Solved before nicknames"}</small>
           </section>
 
           <section className={`board-remaining${isLateGame ? " is-visible" : ""}`} aria-hidden={!isLateGame}>
@@ -166,6 +177,7 @@ export default function BoardPage() {
           <span>Puzzle</span>
           <strong>{String(activeUnlockId).padStart(2, "0")}</strong>
           <b>Unlocked</b>
+          <em>{activeUnlock?.nickname ? `by ${activeUnlock.nickname}` : "Team solve"}</em>
         </div>
       )}
 
