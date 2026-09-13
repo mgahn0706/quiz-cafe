@@ -3,15 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { GameSessionProvider } from "./GameSessionContext";
-import { getPuzzleById, totalPuzzleCount } from "./puzzles";
+import { getPuzzleById, puzzles, totalPuzzleCount } from "./puzzles";
 import type { GameSession, GameState, SubmitAttempt } from "./session";
-import { loadSolvedPuzzleIds, saveSolvedPuzzleIds } from "./storage";
+import { loadSolvedPuzzleIds, saveSolvedPuzzleIds, subscribeToSolvedPuzzleIds } from "./storage";
 import { validateAttempt } from "./validation";
 
 const initialState: GameState = { solvedPuzzleIds: [] };
+const puzzleIds = puzzles.map((puzzle) => puzzle.id);
 
 export function LocalGameSessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GameState>(initialState);
+  const [ready, setReady] = useState(false);
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -19,9 +21,16 @@ export function LocalGameSessionProvider({ children }: { children: ReactNode }) 
       const restoredState = { solvedPuzzleIds: loadSolvedPuzzleIds() };
       stateRef.current = restoredState;
       setState(restoredState);
+      setReady(true);
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => subscribeToSolvedPuzzleIds((solvedPuzzleIds) => {
+    const nextState = { solvedPuzzleIds };
+    stateRef.current = nextState;
+    setState(nextState);
+  }), []);
 
   const submitAttempt = useCallback<SubmitAttempt>(async (puzzleId, submittedValues) => {
     const puzzle = getPuzzleById(puzzleId);
@@ -48,11 +57,14 @@ export function LocalGameSessionProvider({ children }: { children: ReactNode }) 
 
   const session = useMemo<GameSession>(() => ({
     state,
+    puzzleIds,
     solvedCount: state.solvedPuzzleIds.length,
     totalPuzzleCount,
+    ready,
+    connectionStatus: "local",
     isSolved,
     submitAttempt,
-  }), [isSolved, state, submitAttempt]);
+  }), [isSolved, ready, state, submitAttempt]);
 
   return <GameSessionProvider session={session}>{children}</GameSessionProvider>;
 }

@@ -1,10 +1,13 @@
 "use client";
 
-import { CSSProperties, KeyboardEvent, PointerEvent, TransitionEvent, useRef, useState } from "react";
+import { CSSProperties, KeyboardEvent, PointerEvent, Suspense, TransitionEvent, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CabinetLock } from "./components/CabinetLock";
 import { LockChallenge } from "./components/LockChallenge";
 import { backgroundOffsets, puzzleSections, roomNames } from "./config/cabinets";
 import { useGameSession } from "./game/GameSessionContext";
+import { LocalGameSessionProvider } from "./game/LocalGameSessionProvider";
+import { ParticipantPeerGameSessionProvider } from "./game/realtime/ParticipantPeerGameSessionProvider";
 
 function Mark() {
   return (
@@ -139,8 +142,8 @@ function releaseLocks(container: HTMLDivElement, angle: number) {
   });
 }
 
-export default function Home() {
-  const { isSolved, submitAttempt } = useGameSession();
+function Home() {
+  const { isSolved, submitAttempt, connectionStatus, connectionMessage } = useGameSession();
   const [slide, setSlide] = useState(0);
   const [position, setPosition] = useState(1);
   const [dragX, setDragX] = useState(0);
@@ -266,6 +269,8 @@ export default function Home() {
     setSelectedCabinet(cabinet);
   };
   const selectedPuzzle = selectedCabinet === null ? undefined : puzzleSections.flat().find((puzzle) => puzzle.id === selectedCabinet);
+  const connectedForSubmission = connectionStatus === "local" || connectionStatus === "connected";
+  const showConnectionStatus = connectionStatus !== "local" && connectionStatus !== "connected";
   return (
     <main className="experience">
       <header className="floating-header">
@@ -311,7 +316,26 @@ export default function Home() {
       </div>
 
       <div className={message ? "scene-toast visible" : "scene-toast"} role="status">{message}</div>
-      {selectedPuzzle && <LockChallenge puzzle={selectedPuzzle} solved={isSolved(selectedPuzzle.id)} onClose={() => setSelectedCabinet(null)} onSubmit={submitAttempt} />}
+      {showConnectionStatus && <div className={`participant-connection participant-connection--${connectionStatus}`} role="status">{connectionMessage}</div>}
+      {selectedPuzzle && <LockChallenge puzzle={selectedPuzzle} solved={isSolved(selectedPuzzle.id)} onClose={() => setSelectedCabinet(null)} onSubmit={submitAttempt} canSubmit={connectedForSubmission} submissionUnavailableMessage={connectionMessage} />}
     </main>
+  );
+}
+
+function ParticipantRoute() {
+  const hostPeerId = useSearchParams().get("host")?.trim();
+
+  if (hostPeerId) {
+    return <ParticipantPeerGameSessionProvider hostPeerId={hostPeerId} key={hostPeerId}><Home /></ParticipantPeerGameSessionProvider>;
+  }
+
+  return <LocalGameSessionProvider><Home /></LocalGameSessionProvider>;
+}
+
+export default function ParticipantPage() {
+  return (
+    <Suspense fallback={<main className="experience" aria-label="Loading puzzle room" />}>
+      <ParticipantRoute />
+    </Suspense>
   );
 }
