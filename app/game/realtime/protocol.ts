@@ -1,7 +1,7 @@
 import { isMemberIdentity } from "../member";
 import type { MemberIdentity, SolveAttribution } from "../session";
 
-export const realtimeProtocolVersion = 2 as const;
+export const realtimeProtocolVersion = 3 as const;
 
 export type ParticipantToHostMessage =
   | { type: "HELLO"; protocolVersion: typeof realtimeProtocolVersion; member: MemberIdentity }
@@ -9,9 +9,9 @@ export type ParticipantToHostMessage =
   | { type: "REQUEST_SNAPSHOT" };
 
 export type HostToParticipantMessage =
-  | { type: "SNAPSHOT"; revision: number; solvedPuzzleIds: number[]; solveAttributions: SolveAttribution[]; puzzleIds: number[]; totalPuzzleCount: number }
+  | { type: "SNAPSHOT"; revision: number; solvedPuzzleIds: number[]; solveAttributions: SolveAttribution[]; timerStartedAt: number | null; timerStoppedAt: number | null; puzzleIds: number[]; totalPuzzleCount: number }
   | { type: "ATTEMPT_RESULT"; requestId: string; puzzleId: number; correct: boolean; alreadySolved: boolean }
-  | { type: "STATE_UPDATE"; revision: number; solvedPuzzleIds: number[]; solveAttributions: SolveAttribution[] }
+  | { type: "STATE_UPDATE"; revision: number; solvedPuzzleIds: number[]; solveAttributions: SolveAttribution[]; timerStartedAt: number | null; timerStoppedAt: number | null }
   | { type: "HOST_ERROR"; code: string; message: string };
 
 type UnknownRecord = Record<string, unknown>;
@@ -30,6 +30,10 @@ function isPuzzleId(value: unknown): value is number {
 
 function isRevision(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 0;
+}
+
+function isNullableTimestamp(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0);
 }
 
 function isPuzzleIdArray(value: unknown): value is number[] {
@@ -74,6 +78,8 @@ export function isHostToParticipantMessage(value: unknown): value is HostToParti
       return isRevision(value.revision)
         && isPuzzleIdArray(value.solvedPuzzleIds)
         && isSolveAttributionArray(value.solveAttributions)
+        && isNullableTimestamp(value.timerStartedAt)
+        && isNullableTimestamp(value.timerStoppedAt)
         && isPuzzleIdArray(value.puzzleIds)
         && Number.isInteger(value.totalPuzzleCount)
         && Number(value.totalPuzzleCount) >= 0;
@@ -85,7 +91,9 @@ export function isHostToParticipantMessage(value: unknown): value is HostToParti
     case "STATE_UPDATE":
       return isRevision(value.revision)
         && isPuzzleIdArray(value.solvedPuzzleIds)
-        && isSolveAttributionArray(value.solveAttributions);
+        && isSolveAttributionArray(value.solveAttributions)
+        && isNullableTimestamp(value.timerStartedAt)
+        && isNullableTimestamp(value.timerStoppedAt);
     case "HOST_ERROR":
       return typeof value.code === "string"
         && value.code.length > 0

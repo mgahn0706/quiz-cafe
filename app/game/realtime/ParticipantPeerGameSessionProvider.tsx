@@ -15,7 +15,7 @@ import {
 import type { ParticipantToHostMessage } from "./protocol";
 
 const attemptTimeoutMs = 10_000;
-const initialState: GameState = { solvedPuzzleIds: [], solveAttributions: [] };
+const initialState: GameState = { solvedPuzzleIds: [], solveAttributions: [], timerStartedAt: null, timerStoppedAt: null };
 
 type PendingAttempt = {
   puzzleId: number;
@@ -137,7 +137,7 @@ export function ParticipantPeerGameSessionProvider({
         if (data.type === "SNAPSHOT") {
           if (data.revision < latestRevisionRef.current) return;
           latestRevisionRef.current = data.revision;
-          setState({ solvedPuzzleIds: data.solvedPuzzleIds, solveAttributions: data.solveAttributions });
+          setState({ solvedPuzzleIds: data.solvedPuzzleIds, solveAttributions: data.solveAttributions, timerStartedAt: data.timerStartedAt, timerStoppedAt: data.timerStoppedAt });
           setPuzzleIds(data.puzzleIds);
           setTotalPuzzleCount(data.totalPuzzleCount);
           setReady(true);
@@ -148,7 +148,7 @@ export function ParticipantPeerGameSessionProvider({
         if (data.type === "STATE_UPDATE") {
           if (!shouldApplyRevision(latestRevisionRef.current, data.revision)) return;
           latestRevisionRef.current = data.revision;
-          setState({ solvedPuzzleIds: data.solvedPuzzleIds, solveAttributions: data.solveAttributions });
+          setState({ solvedPuzzleIds: data.solvedPuzzleIds, solveAttributions: data.solveAttributions, timerStartedAt: data.timerStartedAt, timerStoppedAt: data.timerStoppedAt });
           return;
         }
 

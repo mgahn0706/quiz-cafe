@@ -11,6 +11,8 @@ export type SolveAttribution = {
 export type GameState = {
   readonly solvedPuzzleIds: readonly number[];
   readonly solveAttributions: readonly SolveAttribution[];
+  readonly timerStartedAt: number | null;
+  readonly timerStoppedAt: number | null;
 };
 
 export type AttemptResult = {
@@ -37,7 +39,9 @@ export interface GameSession {
   readonly connectionMessage?: string;
   readonly joinUrl?: string;
   readonly connectedParticipantCount?: number;
+  readonly connectedMembers?: readonly MemberIdentity[];
   readonly currentMember?: MemberIdentity;
+  startTimer?(): void;
   isSolved(puzzleId: number): boolean;
   submitAttempt: SubmitAttempt;
 }

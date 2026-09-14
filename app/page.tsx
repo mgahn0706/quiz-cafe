@@ -10,6 +10,7 @@ import { LocalGameSessionProvider } from "./game/LocalGameSessionProvider";
 import { loadMemberIdentity, nicknameMaxLength, saveMemberIdentity } from "./game/member";
 import { ParticipantPeerGameSessionProvider } from "./game/realtime/ParticipantPeerGameSessionProvider";
 import type { MemberIdentity } from "./game/session";
+import { formatElapsedTime, useElapsedSeconds } from "./game/useElapsedSeconds";
 
 function Mark() {
   return (
@@ -145,7 +146,7 @@ function releaseLocks(container: HTMLDivElement, angle: number) {
 }
 
 function Home() {
-  const { isSolved, submitAttempt, connectionStatus, connectionMessage } = useGameSession();
+  const { state: gameState, isSolved, submitAttempt, connectionStatus, connectionMessage } = useGameSession();
   const [slide, setSlide] = useState(0);
   const [position, setPosition] = useState(1);
   const [dragX, setDragX] = useState(0);
@@ -153,8 +154,8 @@ function Home() {
   const [jingling, setJingling] = useState(false);
   const [transitioning, setTransitioning] = useState(true);
   const [arrowMotion, setArrowMotion] = useState<"previous" | "next" | null>(null);
-  const [message, setMessage] = useState("");
   const [selectedCabinet, setSelectedCabinet] = useState<number | null>(null);
+  const [timerOpen, setTimerOpen] = useState(false);
   const gesture = useRef({ x: 0, time: 0, lastX: 0, lastTime: 0, velocity: 0 });
   const didDrag = useRef(false);
   const draggingRef = useRef(false);
@@ -271,14 +272,16 @@ function Home() {
     setSelectedCabinet(cabinet);
   };
   const selectedPuzzle = selectedCabinet === null ? undefined : puzzleSections.flat().find((puzzle) => puzzle.id === selectedCabinet);
+  const selectedPuzzleSolved = selectedPuzzle ? isSolved(selectedPuzzle.id) : false;
   const connectedForSubmission = connectionStatus === "local" || connectionStatus === "connected";
   const showConnectionStatus = connectionStatus !== "local" && connectionStatus !== "connected";
+  const elapsedSeconds = useElapsedSeconds(gameState.timerStartedAt, gameState.timerStoppedAt);
+  const elapsedTime = formatElapsedTime(elapsedSeconds);
   return (
     <main className="experience">
       <header className="floating-header">
         <a className="cafe-brand" href="#" aria-label="Quiz Café home"><Mark /><span>Quiz Café</span></a>
         <div className="room-count"><span>{String(slide + 1).padStart(2, "0")}</span><i />{String(puzzleSections.length).padStart(2, "0")}</div>
-        <button type="button" className="menu-button" aria-label="Open menu" onClick={() => setMessage("The café menu is coming soon.")}><span /><span /></button>
       </header>
 
       <div ref={carouselRef} className={`carousel${dragging ? " is-dragging" : ""}${jingling ? " is-jingling" : ""}${arrowMotion ? ` arrow-motion-${arrowMotion}` : ""}`} style={{ "--background-drag": "0px", "--background-base": `${backgroundOffsets[slide]}px` } as CSSProperties} role="region" aria-roledescription="carousel" aria-label="Numbered café cabinets" tabIndex={0} onKeyDown={handleKeys} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancelDrag}>
@@ -317,9 +320,19 @@ function Home() {
         <button type="button" className={arrowMotion === "next" ? "arrow-control active" : "arrow-control"} onClick={() => clickArrow(1)} aria-label="Next café"><Arrow /></button>
       </div>
 
-      <div className={message ? "scene-toast visible" : "scene-toast"} role="status">{message}</div>
       {showConnectionStatus && <div className={`participant-connection participant-connection--${connectionStatus}`} role="status">{connectionMessage}</div>}
-      {selectedPuzzle && <LockChallenge puzzle={selectedPuzzle} solved={isSolved(selectedPuzzle.id)} onClose={() => setSelectedCabinet(null)} onSubmit={submitAttempt} canSubmit={connectedForSubmission} submissionUnavailableMessage={connectionMessage} />}
+      {connectionStatus !== "local" && <button className="participant-timer" type="button" onClick={() => setTimerOpen(true)}><span>Room timer</span><time>{elapsedTime}</time></button>}
+      {timerOpen && (
+        <div className="participant-timer-modal" role="dialog" aria-modal="true" aria-labelledby="participant-timer-title">
+          <section>
+            <button type="button" onClick={() => setTimerOpen(false)} aria-label="Close room timer">×</button>
+            <span id="participant-timer-title">Room timer</span>
+            <time>{elapsedTime}</time>
+            <small>{gameState.timerStartedAt === null ? "Waiting for the board to start" : gameState.timerStoppedAt === null ? "The room is in progress" : "All puzzles unlocked"}</small>
+          </section>
+        </div>
+      )}
+      {selectedPuzzle && <LockChallenge key={`${selectedPuzzle.id}-${selectedPuzzleSolved ? "solved" : "unsolved"}`} puzzle={selectedPuzzle} solved={selectedPuzzleSolved} onClose={() => setSelectedCabinet(null)} onSubmit={submitAttempt} canSubmit={connectedForSubmission} submissionUnavailableMessage={connectionMessage} />}
     </main>
   );
 }
@@ -365,6 +378,86 @@ function NicknameDialog({
   );
 }
 
+function ParticipantWaitingCurtain() {
+  const { ready, connectionStatus, connectionMessage } = useGameSession();
+  const waitingForHost = ready && connectionStatus === "connected";
+
+  return (
+    <main className="participant-waiting" aria-live="polite">
+      <div className="participant-curtain participant-curtain--left" aria-hidden="true" />
+      <div className="participant-curtain participant-curtain--right" aria-hidden="true" />
+      <section>
+        <Mark />
+        <span>Problem Room</span>
+        <h1>{waitingForHost ? "Waiting for the host…" : "Connecting to the board…"}</h1>
+        <p>{waitingForHost ? "The cabinets will appear when the board starts the room." : connectionMessage}</p>
+        <i aria-hidden="true"><b /><b /><b /></i>
+      </section>
+    </main>
+  );
+}
+
+function ParticipantSolveSnackbar({ member }: { member: MemberIdentity }) {
+  const { state } = useGameSession();
+  const previousPuzzleIds = useRef<Set<number> | null>(null);
+  const [notifications, setNotifications] = useState<Array<{ puzzleId: number; nickname: string }>>([]);
+  const activeNotification = notifications[0] ?? null;
+
+  useEffect(() => {
+    const currentPuzzleIds = new Set(state.solveAttributions.map((attribution) => attribution.puzzleId));
+    if (previousPuzzleIds.current === null) {
+      previousPuzzleIds.current = currentPuzzleIds;
+      return;
+    }
+
+    const newNotifications = state.solveAttributions
+      .filter((attribution) => !previousPuzzleIds.current?.has(attribution.puzzleId) && attribution.member.id !== member.id)
+      .map((attribution) => ({ puzzleId: attribution.puzzleId, nickname: attribution.member.nickname }));
+    previousPuzzleIds.current = currentPuzzleIds;
+    if (newNotifications.length > 0) setNotifications((current) => [...current, ...newNotifications]);
+  }, [member.id, state.solveAttributions]);
+
+  useEffect(() => {
+    if (!activeNotification) return;
+    const timer = window.setTimeout(() => setNotifications((current) => current.slice(1)), 2600);
+    return () => window.clearTimeout(timer);
+  }, [activeNotification]);
+
+  if (!activeNotification) return null;
+  return (
+    <div className="scene-toast visible participant-solve-toast" role="status" aria-live="polite" key={activeNotification.puzzleId}>
+      <b>{activeNotification.nickname}</b> unlocked puzzle {String(activeNotification.puzzleId).padStart(2, "0")}!
+    </div>
+  );
+}
+
+function RemoteParticipantExperience({
+  member,
+  editingNickname,
+  onEditNickname,
+  onSaveNickname,
+  onCancelNickname,
+}: {
+  member: MemberIdentity;
+  editingNickname: boolean;
+  onEditNickname: () => void;
+  onSaveNickname: (member: MemberIdentity) => void;
+  onCancelNickname: () => void;
+}) {
+  const { state, ready } = useGameSession();
+
+  if (!ready || state.timerStartedAt === null) return <ParticipantWaitingCurtain />;
+
+  return (
+    <>
+      <Home />
+      <ParticipantSolveSnackbar member={member} />
+      <button className="participant-nickname" type="button" onClick={onEditNickname}><span>Playing as</span>{member.nickname}</button>
+      {editingNickname && <NicknameDialog currentMember={member} onSave={onSaveNickname} onCancel={onCancelNickname} />}
+    </>
+  );
+}
+
 function RemoteParticipantRoute({ hostPeerId }: { hostPeerId: string }) {
   const [member, setMember] = useState<MemberIdentity | null>();
   const [editingNickname, setEditingNickname] = useState(false);
@@ -379,9 +472,13 @@ function RemoteParticipantRoute({ hostPeerId }: { hostPeerId: string }) {
 
   return (
     <ParticipantPeerGameSessionProvider hostPeerId={hostPeerId} member={member} key={`${hostPeerId}-${member.nickname}`}>
-      <Home />
-      <button className="participant-nickname" type="button" onClick={() => setEditingNickname(true)}><span>Playing as</span>{member.nickname}</button>
-      {editingNickname && <NicknameDialog currentMember={member} onSave={(nextMember) => { setMember(nextMember); setEditingNickname(false); }} onCancel={() => setEditingNickname(false)} />}
+      <RemoteParticipantExperience
+        member={member}
+        editingNickname={editingNickname}
+        onEditNickname={() => setEditingNickname(true)}
+        onSaveNickname={(nextMember) => { setMember(nextMember); setEditingNickname(false); }}
+        onCancelNickname={() => setEditingNickname(false)}
+      />
     </ParticipantPeerGameSessionProvider>
   );
 }

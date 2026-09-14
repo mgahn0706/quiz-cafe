@@ -43,6 +43,8 @@ export function processAuthoritativeAttempt(
         solveAttributions: member
           ? [...current.gameState.solveAttributions, { puzzleId, member }]
           : current.gameState.solveAttributions,
+        timerStartedAt: current.gameState.timerStartedAt,
+        timerStoppedAt: current.gameState.timerStoppedAt,
       },
       revision: current.revision + 1,
     },

@@ -93,7 +93,7 @@ export function LockChallenge({ puzzle, solved = false, onClose, onSubmit, canSu
         <div className="challenge-copy"><span className="challenge-kicker">Match the café clue</span><h2 id="lock-title">Manipulate the lock</h2><div className="lock-clue" aria-label={`Combination clue ${puzzle.clue}`}>{puzzle.clue}</div></div>
         <div className="direct-lock-area"><InteractiveLock type={puzzle.lockType} values={values} choices={inputDefinition.choices} open={result === "open"} disabled={result === "open" || submitting} onCycle={cycle} onToggle={toggle} onDirection={pushDirection} onReset={resetDirection} /></div>
         <p className="challenge-result" role="status">{submissionMessage || (result === "wrong" ? "Not quite—check the clue and try again." : result === "open" ? "Click! Cabinet unlocked." : inputDefinition.mode === "pins" ? "Press the pins directly." : isDirectionLock(puzzle.lockType) ? "Tap or swipe the dial. Tap the silver ring to reset." : "Swipe each wheel vertically.")}</p>
-        <button className="unlock-button" type="button" disabled={submitting || !canSubmit} onClick={() => void check()}>{result === "open" ? "Unlocked ✓" : submitting ? "Checking…" : "Unlock"}</button>
+        <button className="unlock-button" type="button" disabled={result === "open" || submitting || !canSubmit} onClick={() => void check()}>{result === "open" ? "Unlocked ✓" : submitting ? "Checking…" : "Unlock"}</button>
       </div>
     </section>
   );
